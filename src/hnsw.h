@@ -146,7 +146,7 @@ struct HnswElementData
 
 typedef HnswElementData * HnswElement;
 
-typedef struct HnswCandidate
+typedef struct HnswCandidate  //用于HNSW算法中的候选项列表，用于存储与查询点最接近的元素
 {
 	HnswElementPtr element;
 	float		distance;
