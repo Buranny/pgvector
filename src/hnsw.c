@@ -21,11 +21,11 @@ int			hnsw_lock_tranche_id;
 static relopt_kind hnsw_relopt_kind;
 
 /*
- * Assign a tranche ID for our LWLocks. This only needs to be done by one
- * backend, as the tranche ID is remembered in shared memory.
+ * Assign a tranche ID for our LWLocks. This only needs to be done by one	为我们的LWLocks分配一个tranche ID。
+ * backend, as the tranche ID is remembered in shared memory.			这只需要由一个后端完成，因为在共享内存中记住了tranche ID。
  *
- * This shared memory area is very small, so we just allocate it from the
- * "slop" that PostgreSQL reserves for small allocations like this. If
+ * This shared memory area is very small, so we just allocate it from the	这个共享内存区域非常小，所以我们只是从PostgreSQL为这样的小分配保留的“slop”中分配它。
+ * "slop" that PostgreSQL reserves for small allocations like this. If		如果这个变大了，我们应该使用shmem_request_hook和RequestAddinShmemSpace()来为这个预留空间。
  * this grows bigger, we should use a shmem_request_hook and
  * RequestAddinShmemSpace() to pre-reserve space for this.
  */
