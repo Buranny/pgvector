@@ -119,7 +119,12 @@ CreateMetaPage(HnswBuildState * buildstate)
 }
 
 /*
- * Add a new page
+ * Add a new page	HNSW索引结构中添加新页的函数。
+ 它会创建一个新的缓冲区（newbuf），并将其用作新页的存储位置。
+ 然后，它会更新前一页的指针，以指向新页的位置。
+ 最后，它会将前一页的缓冲区标记为脏，并释放它的锁，以便其他进程可以访问它。
+ 在新页准备好之后，函数会将新缓冲区和新页传递回调用者。
+ 函数还包含一些锁定和解锁缓冲区的代码，以确保数据的一致性和可靠性。
  */
 static void
 HnswBuildAppendPage(Relation index, Buffer *buf, Page *page, ForkNumber forkNum)
@@ -147,7 +152,11 @@ HnswBuildAppendPage(Relation index, Buffer *buf, Page *page, ForkNumber forkNum)
 }
 
 /*
- * Create graph pages
+ * Create graph pages	创建图形页面
+ 代码中使用了一些自定义的数据类型和函数，如HnswBuildState、HnswElementTuple、HnswNeighborTuple、HnswNewBuffer等。
+ 代码主要的流程是遍历图形中的所有元素，为每个元素分配空间，并将其存储到页面中。
+ 同时，为每个元素计算邻居的位置，并将邻居的占位符存储到页面中。
+ 最后，将页面的信息写入到元数据页面中，以便后续使用。
  */
 static void
 CreateGraphPages(HnswBuildState * buildstate)
@@ -248,17 +257,20 @@ CreateGraphPages(HnswBuildState * buildstate)
 }
 
 /*
- * Write neighbor tuples
+ * Write neighbor tuples	将HNSW构建状态中的邻居元组写入索引中。具体来说，它遍历了构建状态中的每个元素，为每个元素写入邻居元组，并将其写入索引中。
+- 遍历构建状态中的每个元素。
+- 为每个元素创建邻居元组。
+- 将邻居元组写入索引中。
  */
 static void
 WriteNeighborTuples(HnswBuildState * buildstate)
 {
-	Relation	index = buildstate->index;
-	ForkNumber	forkNum = buildstate->forkNum;
-	int			m = buildstate->m;
-	HnswElementPtr iter = buildstate->graph->head;
-	char	   *base = buildstate->hnswarea;
-	HnswNeighborTuple ntup;
+	Relation	index = buildstate->index;	//HNSW构建状态
+	ForkNumber	forkNum = buildstate->forkNum;	//分叉号
+	int			m = buildstate->m;	//HNSW中的m值
+	HnswElementPtr iter = buildstate->graph->head;	//HNSW元素迭代器
+	char	   *base = buildstate->hnswarea;	//HNSW元素存储区域
+	HnswNeighborTuple ntup;				//邻居元组
 
 	/* Allocate once */
 	ntup = palloc0(HNSW_TUPLE_ALLOC_SIZE);
@@ -298,12 +310,16 @@ WriteNeighborTuples(HnswBuildState * buildstate)
 }
 
 /*
- * Flush pages
+ * Flush pages	将HNSW图的数据刷新到磁盘中
+ 该函数会调用CreateMetaPage函数和CreateGraphPages函数，用于创建元数据页和图页，并调用WriteNeighborTuples函数，将邻居元组写入到磁盘中。
+
+此外，该函数还会将buildstate->graph->flushed设置为true，表示数据已经刷新到磁盘中。
+最后，该函数会通过MemoryContextReset函数重置buildstate->graphCtx内存上下文。
  */
 static void
 FlushPages(HnswBuildState * buildstate)
 {
-#ifdef HNSW_MEMORY
+#ifdef HNSW_MEMORY  //是一个条件编译指令，它表示如果定义了HNSW_MEMORY宏，则执行elog(INFO, 'memory: %zu MB', buildstate->graph->memoryUsed / (1024 * 1024))语句，该语句会将图的内存使用情况打印到日志中。
 	elog(INFO, "memory: %zu MB", buildstate->graph->memoryUsed / (1024 * 1024));
 #endif
 
@@ -316,7 +332,12 @@ FlushPages(HnswBuildState * buildstate)
 }
 
 /*
- * Add a heap TID to an existing element
+ * Add a heap TID to an existing element	向一个HNSW图中的元素添加一个重复元素
+ 首先，该函数会获取要添加的重复元素的锁，并将锁设置为独占模式（EXCLUSIVE）。
+ 接着，如果该重复元素的heaptidsLength（堆的大小）已经达到了HNSW_HEAPTIDS的最大值，那么函数会释放该元素的锁并返回false，表示添加失败。
+ 如果该元素的堆大小还没有达到最大值，那么函数会调用HnswAddHeapTid()函数，将要添加的元素的heaptids（堆的标识符）添加到该重复元素的堆中。
+ 最后，函数会释放该元素的锁，并返回true，表示添加成功。
+ 需要注意的是，这段代码中使用了LWLock（轻量级锁）来保证线程安全。
  */
 static bool
 AddDuplicateInMemory(HnswElement element, HnswElement dup)
