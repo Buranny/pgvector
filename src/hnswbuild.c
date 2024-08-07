@@ -1,37 +1,37 @@
 /*
  * The HNSW build happens in two phases:
  *
- * 1. In-memory phase
+ * 1. In-memory phase   内存阶段（数据全部存储在内存里）
  *
- * In this first phase, the graph is held completely in memory. When the graph
- * is fully built, or we run out of memory reserved for the build (determined
- * by maintenance_work_mem), we materialize the graph to disk (see
+ * In this first phase, the graph is held completely in memory. When the graph		在第一阶段，图形完全保存在内存中。
+ * is fully built, or we run out of memory reserved for the build (determined		当图完全构建完成，或者我们用完了为构建预留的内存（由maintance_work_mem决定），
+ * by maintenance_work_mem), we materialize the graph to disk (see			我们将图实体化到磁盘（参见FlushPages(）)，并切换到磁盘阶段。
  * FlushPages()), and switch to the on-disk phase.
  *
- * In a parallel build, a large contiguous chunk of shared memory is allocated
- * to hold the graph. Each worker process has its own HnswBuildState struct in
- * private memory, which contains information that doesn't change throughout
- * the build, and pointers to the shared structs in shared memory. The shared
- * memory area is mapped to a different address in each worker process, and
- * 'HnswBuildState.hnswarea' points to the beginning of the shared area in the
+ * In a parallel build, a large contiguous chunk of shared memory is allocated		在并行构建中，会分配一大块连续的共享内存来保存图。
+ * to hold the graph. Each worker process has its own HnswBuildState struct in		每个工作进程在私有内存中都有自己的HnswBuildState结构，
+ * private memory, which contains information that doesn't change throughout		它包含在整个构建过程中不会改变的信息，以及指向共享内存中共享结构的指针。
+ * the build, and pointers to the shared structs in shared memory. The shared		共享内存区域映射到每个工作进程中的不同地址，
+ * memory area is mapped to a different address in each worker process, and		而“HnswBuildState.hnswarea”指向工作进程地址空间中共享区域的开头。
+ * 'HnswBuildState.hnswarea' points to the beginning of the shared area in the		图中使用的所有指针都是“相对指针”，存储为“hnswarea”的偏移量。
  * worker process's address space. All pointers used in the graph are
  * "relative pointers", stored as an offset from 'hnswarea'.
- *
- * Each element is protected by an LWLock. It must be held when reading or
+ * 
+ * Each element is protected by an LWLock. It must be held when reading or		每个元素都受LWLock保护。当读取或修改元素的邻居或`heatids`时，必须持有它。
  * modifying the element's neighbors or 'heaptids'.
  *
- * In a non-parallel build, the graph is held in backend-private memory. All
- * the elements are allocated in a dedicated memory context, 'graphCtx', and
+ * In a non-parallel build, the graph is held in backend-private memory. All		在非并行构建中，图保存在后端私有内存中。
+ * the elements are allocated in a dedicated memory context, 'graphCtx', and		所有元素都分配在一个专用的内存上下文`graphCtx`中，图中使用的指针是普通指针。
  * the pointers used in the graph are regular pointers.
  *
- * 2. On-disk phase
+ * 2. On-disk phase	硬盘阶段（数据是存放在外部存储介质当中）
  *
- * In the on-disk phase, the index is built by inserting each vector to the
- * index one by one, just like on INSERT. The only difference is that we don't
- * WAL-log the individual inserts. If the graph fit completely in memory and
+ * In the on-disk phase, the index is built by inserting each vector to the		在on-disk阶段，索引是通过将每个向量逐个插入到索引中来建立的，就像在INSERT上一样。
+ * index one by one, just like on INSERT. The only difference is that we don't		唯一的区别是我们不对单个插入进行WAL日志记录。
+ * WAL-log the individual inserts. If the graph fit completely in memory and		如果图形完全在内存中，并且在内存中阶段完全构建，则跳过磁盘上阶段。
  * was fully built in the in-memory phase, the on-disk phase is skipped.
  *
- * After we have finished building the graph, we perform one more scan through
+ * After we have finished building the graph, we perform one more scan through		在我们完成构建图之后，我们通过索引再执行一次扫描，并将所有页面写入WAL。
  * the index and write all the pages to the WAL.
  */
 #include "postgres.h"
@@ -80,7 +80,12 @@
 #endif
 
 /*
- * Create the metapage
+ * Create the metapage  创建一个HNSW元数据页，并将一些元数据信息写入该页
+	1. 从buildstate中获取索引和forkNum信息。
+	2. 创建一个新的缓冲区buf，将其分配给一个页page。
+	3. 初始化该页，设置元数据信息。
+	4. 将元数据信息写入HNSW元数据页metap中。
+	5. 标记缓冲区为脏，释放缓冲区并解锁。
  */
 static void
 CreateMetaPage(HnswBuildState * buildstate)
