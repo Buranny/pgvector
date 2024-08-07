@@ -113,7 +113,7 @@
 extern int	hnsw_ef_search;
 extern int	hnsw_lock_tranche_id;
 
-typedef struct HnswElementData HnswElementData;
+typedef struct HnswElementData HnswElementData;  //是一个结构体类型，包含了HNSW算法中每个节点的数据信息。具体的成员变量需要根据具体的应用场景来定义（在下面）
 typedef struct HnswNeighborArray HnswNeighborArray;
 
 #define HnswPtrDeclare(type, relptrtype, ptrtype) \
